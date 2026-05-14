@@ -1,12 +1,26 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>{{ workspace.name }}</h2>
+<div class="workspace-header">
+  <div>
+    <h2>{{ workspace.name }}</h2>
+    <p>{{ workspace.description }}</p>
+  </div>
+
+  {% if is_admin %}
+  <div>
+    <a href="{{ url_for('invite_to_workspace', workspace_id=workspace.workspace_id) }}">
+      <button>Invite User</button>
+    </a>
+  </div>
+  {% endif %}
+</div>
+<!-- <h2>{{ workspace.name }}</h2>
 <p>{{ workspace.description }}</p>
 
 {% if is_admin %}
 <a href="{{ url_for('invite_to_workspace', workspace_id=workspace.workspace_id) }}">
   <button>Invite User</button>
-</a>
+</a> -->
 <h3>Members</h3>
 {% for member in members %}
 <div class="card">

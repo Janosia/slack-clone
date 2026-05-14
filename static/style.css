@@ -394,3 +394,30 @@ a {
     margin-top: 15px;
     color: var(--link);
 }
+
+.workspace-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 15px;
+}
+
+/* left side text */
+.workspace-header h2 {
+    margin: 0;
+    color: var(--accent-green);
+}
+
+.workspace-header p {
+    margin: 5px 0 0 0;
+    opacity: 0.7;
+}
+
+/* button side */
+.workspace-header button {
+    white-space: nowrap;
+}

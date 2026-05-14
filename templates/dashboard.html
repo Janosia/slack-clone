@@ -8,15 +8,14 @@
 <div class="invite-card">
   <b>{{ inv.workspace_name }}</b> — invited by {{ inv.invited_by }}
   <form method="POST" 
-        action="{{ url_for('respond_workspace_invitation', 
-                           inv_id=inv.invitation_id) }}"
-        style="display:inline">
+        action="{{ url_for('respond_workspace_invitation', inv_id=inv.invitation_id) }}" style="display:inline">
     <button name="action" value="accepted">Accept</button>
     <button name="action" value="declined">Decline</button>
   </form>
 </div>
 {% endfor %}
 {% endif %}
+
 {% if channel_invitations %}
 <h3>Pending Channel Invitations</h3>
 {% for inv in channel_invitations %}
@@ -25,8 +24,7 @@
   in {{ inv.workspace_name }} 
   — invited by {{ inv.invited_by }}
   <form method="POST"
-        action="{{ url_for('respond_channel_invitation',
-                           inv_id=inv.invitation_id) }}"
+        action="{{ url_for('respond_channel_invitation', inv_id=inv.invitation_id) }}"
         style="display:inline">
     <button name="action" value="accepted">Accept</button>
     <button name="action" value="declined">Decline</button>
@@ -34,12 +32,11 @@
 </div>
 {% endfor %}
 {% endif %}
+
 <h3>My Workspaces</h3>
 {% for ws in workspaces %}
 <div class="card">
-  <a href="{{ url_for('workspace', 
-                      workspace_id=ws.workspace_id) }}">
-    {{ ws.name }}
+  <a href="{{ url_for('workspace', workspace_id=ws.workspace_id) }}"> {{ ws.name }}
   </a>
   {% if ws.is_admin %}<span class="badge">admin</span>{% endif %}
   <p>{{ ws.description }}</p>

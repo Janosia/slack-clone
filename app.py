@@ -64,6 +64,7 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """User login checks for valid username and password"""
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
@@ -137,12 +138,13 @@ def dashboard():
 
 @app.route('/workspace/create', methods=['POST'])
 def create_workspace():
+    """Crete workspaces feature"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    name        = request.form.get('name', '').strip()
+    name = request.form.get('name', '').strip()
     description = request.form.get('description', '').strip()
-    user_id     = session['user_id']
+    user_id = session['user_id']
 
     if not name:
         flash('Workspace name is required.')
@@ -208,9 +210,7 @@ def respond_workspace_invitation(inv_id):
 
         # Update invitation status
         cur.execute(
-            """UPDATE workspace_invitations
-               SET status=%s, responded_at=NOW()
-               WHERE invitation_id=%s""",
+            """UPDATE workspace_invitations SET status=%s, responded_at=NOW() WHERE invitation_id=%s""",
             (action, inv_id)
         )
 
@@ -271,11 +271,11 @@ def workspace(workspace_id):
     # Public channels + channels user is a member of
     channels = db.query(
         """SELECT c.channel_id, c.name, c.channel_type,
-                  EXISTS(
-                    SELECT 1 FROM channel_members cm
-                    WHERE cm.channel_id = c.channel_id
-                    AND cm.user_id = %s
-                  ) AS is_member
+                EXISTS(
+                SELECT 1 FROM channel_members cm
+                WHERE cm.channel_id = c.channel_id
+                AND cm.user_id = %s
+                ) AS is_member
            FROM channels c
            WHERE c.workspace_id = %s
              AND (c.channel_type = 'public'
@@ -287,9 +287,16 @@ def workspace(workspace_id):
         (user_id, workspace_id, user_id)
     )
     # print(f"DEBUG: channels={channels}")
-    
-    return render_template('workspace.html', workspace=workspace_info, channels=channels, is_admin=member['is_admin'])
+    members = db.query(
+    """SELECT u.user_id, u.username, wm.is_admin
+       FROM workspace_members wm
+       JOIN users u ON wm.user_id = u.user_id
+       WHERE wm.workspace_id=%s
+       ORDER BY wm.is_admin DESC, u.username""",
+    (workspace_id,) )
 
+    return render_template('workspace.html',workspace=workspace_info, channels=channels,members=members, is_admin=member['is_admin'])
+    
 
 @app.route('/workspace/<int:workspace_id>/channel/create', methods=['POST'])
 def create_channel(workspace_id):
@@ -341,6 +348,171 @@ def create_channel(workspace_id):
 
     return redirect(url_for('workspace', workspace_id=workspace_id))
 
+@app.route('/workspace/<int:workspace_id>/remove/<int:target_user_id>', methods=['POST'])
+def remove_workspace_member(workspace_id, target_user_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+
+    # Only admins can remove
+    admin = db.query(
+        """SELECT 1 FROM workspace_members
+           WHERE workspace_id=%s AND user_id=%s 
+           AND is_admin=TRUE""",
+        (workspace_id, user_id), fetchone=True
+    )
+    if not admin:
+        flash('Only admins can remove members.')
+        return redirect(url_for('workspace', workspace_id=workspace_id))
+
+    # Can't remove yourself
+    if target_user_id == user_id:
+        flash('You cannot remove yourself.')
+        return redirect(url_for('workspace', workspace_id=workspace_id))
+
+    # Remove from workspace and all its channels
+    conn = db.get_connection()
+    cur  = conn.cursor()
+    try:
+        # Remove from all channels in this workspace first
+        cur.execute(
+            """DELETE FROM channel_members
+               WHERE user_id=%s
+                 AND channel_id IN (
+                   SELECT channel_id FROM channels
+                   WHERE workspace_id=%s
+                 )""",
+            (target_user_id, workspace_id)
+        )
+        # Remove from workspace
+        cur.execute(
+            """DELETE FROM workspace_members
+               WHERE workspace_id=%s AND user_id=%s""",
+            (workspace_id, target_user_id)
+        )
+        conn.commit()
+        flash('Member removed.')
+    except Exception as e:
+        conn.rollback()
+        flash('Error removing member.')
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect(url_for('workspace', workspace_id=workspace_id))
+
+@app.route('/workspace/<int:workspace_id>/promote/<int:target_user_id>', methods=['POST'])
+def promote_to_admin(workspace_id, target_user_id):
+    """ Promoting an user to admin """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+
+    # Only admins can promote
+    admin = db.query(
+        """SELECT 1 FROM workspace_members
+           WHERE workspace_id=%s AND user_id=%s 
+           AND is_admin=TRUE""",
+        (workspace_id, user_id), fetchone=True
+    )
+    if not admin:
+        flash('Only admins can promote members.')
+        return redirect(url_for('workspace', workspace_id=workspace_id))
+
+    db.query(
+        """UPDATE workspace_members SET is_admin=TRUE
+           WHERE workspace_id=%s AND user_id=%s""",
+        (workspace_id, target_user_id)
+    )
+    flash('Member promoted to admin.')
+    return redirect(url_for('workspace', workspace_id=workspace_id))
+
+
+@app.route('/workspace/<int:workspace_id>/direct', methods=['POST'])
+def create_direct_channel(workspace_id):
+    """Creating Direct Channels 
+    1. Check if invited user exists
+    2. Check if invited user is in the workspace
+    3. Check if a direct channel already exists between them or not
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    target_username = request.form.get('username', '').strip()
+
+    # Find target user
+    target = db.query(
+        "SELECT user_id, username FROM users WHERE username=%s",
+        (target_username,), fetchone=True
+    )
+    if not target:
+        flash(f'User "{target_username}" not found.')
+        return redirect(url_for('workspace', workspace_id=workspace_id))
+
+    target_id = target['user_id']
+
+    if target_id == user_id:
+        flash('You cannot start a direct message with yourself.')
+        return redirect(url_for('workspace', workspace_id=workspace_id))
+
+    # Check target is in same workspace
+    in_workspace = db.query(
+        """SELECT 1 FROM workspace_members
+           WHERE workspace_id=%s AND user_id=%s""",
+        (workspace_id, target_id), fetchone=True
+    )
+    if not in_workspace:
+        flash('That user is not in this workspace.')
+        return redirect(url_for('workspace', workspace_id=workspace_id))
+
+    # Check if direct channel already exists between these two
+    existing = db.query(
+        """SELECT c.channel_id FROM channels c
+           JOIN channel_members cm1 
+             ON c.channel_id = cm1.channel_id AND cm1.user_id=%s
+           JOIN channel_members cm2 
+             ON c.channel_id = cm2.channel_id AND cm2.user_id=%s
+           WHERE c.workspace_id=%s 
+             AND c.channel_type='direct'""",
+        (user_id, target_id, workspace_id), fetchone=True
+    )
+    if existing:
+        # Already exists, just go there
+        return redirect(url_for('channel', channel_id=existing['channel_id']))
+
+    conn = db.get_connection()
+    cur  = conn.cursor()
+    try:
+        # Create direct channel named after both users
+        channel_name = f"{session['username']}-{target['username']}"
+        cur.execute(
+            """INSERT INTO channels 
+               (workspace_id, name, channel_type, created_by)
+               VALUES (%s, %s, 'direct', %s)
+               RETURNING channel_id""",
+            (workspace_id, channel_name, user_id)
+        )
+        channel_id = cur.fetchone()[0]
+
+        # Add both users
+        cur.execute(
+            """INSERT INTO channel_members (channel_id, user_id)
+               VALUES (%s, %s), (%s, %s)""",
+            (channel_id, user_id, channel_id, target_id)
+        )
+        conn.commit()
+        return redirect(url_for('channel', channel_id=channel_id))
+    except Exception as e:
+        conn.rollback()
+        flash('Error creating direct message.')
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect(url_for('workspace', workspace_id=workspace_id))
 
 # ─────────────────────────────────────────
 # CHANNEL — messages, post, search
@@ -710,8 +882,7 @@ def invite_to_workspace(workspace_id):
         )
         if already_member:
             flash(f'{invitee_username} is already a member.')
-            return render_template('invite_workspace.html',
-                                   workspace=workspace_info)
+            return render_template('invite_workspace.html', workspace=workspace_info)
 
         # Check if already has a pending invitation
         already_invited = db.query(
@@ -723,8 +894,7 @@ def invite_to_workspace(workspace_id):
         )
         if already_invited:
             flash(f'{invitee_username} already has a pending invitation.')
-            return render_template('invite_workspace.html',
-                                   workspace=workspace_info)
+            return render_template('invite_workspace.html', workspace=workspace_info)
 
         # Send invitation
         db.query(
@@ -738,6 +908,48 @@ def invite_to_workspace(workspace_id):
 
     return render_template('invite_workspace.html', workspace=workspace_info)
 
+# ─────────────────────────────────────────
+# PROFILE
+# ─────────────────────────────────────────
 
+@app.route('/profile', methods=['GET', 'POST'])
+def edit_profile():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    user    = db.query(
+        "SELECT * FROM users WHERE user_id=%s",
+        (user_id,), fetchone=True
+    )
+
+    if request.method == 'POST':
+        nickname = request.form.get('nickname', '').strip()
+        username = request.form.get('username', '').strip()
+
+        if not username:
+            flash('Username cannot be empty.')
+            return render_template('profile.html', user=user)
+
+        # Check username not taken by someone else
+        taken = db.query(
+            """SELECT user_id FROM users 
+               WHERE username=%s AND user_id != %s""",
+            (username, user_id), fetchone=True
+        )
+        if taken:
+            flash('Username already taken.')
+            return render_template('profile.html', user=user)
+
+        db.query(
+            """UPDATE users SET username=%s, nickname=%s
+               WHERE user_id=%s""",
+            (username, nickname, user_id)
+        )
+        session['username'] = username
+        flash('Profile updated.')
+        return redirect(url_for('dashboard'))
+
+    return render_template('profile.html', user=user)
 if __name__ == '__main__':
     app.run(debug=True)

@@ -3,7 +3,7 @@
 <h2>Your Workspaces</h2>
 
 {% if invitations %}
-<h3>Pending Invitations</h3>
+<h3>Pending Workspace Invitations</h3>
 {% for inv in invitations %}
 <div class="invite-card">
   <b>{{ inv.workspace_name }}</b> — invited by {{ inv.invited_by }}
@@ -17,7 +17,23 @@
 </div>
 {% endfor %}
 {% endif %}
-
+{% if channel_invitations %}
+<h3>Pending Channel Invitations</h3>
+{% for inv in channel_invitations %}
+<div class="invite-card">
+  <b>#{{ inv.channel_name }}</b> 
+  in {{ inv.workspace_name }} 
+  — invited by {{ inv.invited_by }}
+  <form method="POST"
+        action="{{ url_for('respond_channel_invitation',
+                           inv_id=inv.invitation_id) }}"
+        style="display:inline">
+    <button name="action" value="accepted">Accept</button>
+    <button name="action" value="declined">Decline</button>
+  </form>
+</div>
+{% endfor %}
+{% endif %}
 <h3>My Workspaces</h3>
 {% for ws in workspaces %}
 <div class="card">
@@ -37,21 +53,5 @@
   <button type="submit">Create</button>
 </form>
 
-{% if channel_invitations %}
-<h3>Pending Channel Invitations</h3>
-{% for inv in channel_invitations %}
-<div class="invite-card">
-  <b>#{{ inv.channel_name }}</b> 
-  in {{ inv.workspace_name }} 
-  — invited by {{ inv.invited_by }}
-  <form method="POST"
-        action="{{ url_for('respond_channel_invitation',
-                           inv_id=inv.invitation_id) }}"
-        style="display:inline">
-    <button name="action" value="accepted">Accept</button>
-    <button name="action" value="declined">Decline</button>
-  </form>
-</div>
-{% endfor %}
-{% endif %}
+
 {% endblock %}

@@ -248,7 +248,7 @@ def workspace(workspace_id):
 
     user_id = session['user_id']
     
-    # print(f"DEBUG: user_id={user_id}, workspace_id={workspace_id}")
+    print(f"DEBUG: user_id={user_id}, workspace_id={workspace_id}")
 
     # Check user is a member
     member = db.query(
@@ -257,7 +257,7 @@ def workspace(workspace_id):
         (workspace_id, user_id), fetchone=True
     )
 
-    # print(f"DEBUG: member={member}")
+    print(f"DEBUG: member={member}")
     
     if not member:
         flash('Access denied.')
@@ -286,7 +286,7 @@ def workspace(workspace_id):
            ORDER BY c.channel_type, c.name""",
         (user_id, workspace_id, user_id)
     )
-    # print(f"DEBUG: channels={channels}")
+    print(f"DEBUG: channels={channels}")
     members = db.query(
     """SELECT u.user_id, u.username, wm.is_admin
        FROM workspace_members wm

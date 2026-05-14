@@ -5,22 +5,16 @@
     <h2>{{ workspace.name }}</h2>
     <p>{{ workspace.description }}</p>
   </div>
-
   {% if is_admin %}
   <div>
-    <a href="{{ url_for('invite_to_workspace', workspace_id=workspace.workspace_id) }}">
+    <a href="{{ url_for('invite_to_workspace', 
+                        workspace_id=workspace.workspace_id) }}">
       <button>Invite User</button>
     </a>
   </div>
   {% endif %}
 </div>
-<!-- <h2>{{ workspace.name }}</h2>
-<p>{{ workspace.description }}</p>
 
-{% if is_admin %}
-<a href="{{ url_for('invite_to_workspace', workspace_id=workspace.workspace_id) }}">
-  <button>Invite User</button>
-</a> -->
 <h3>Members</h3>
 {% for member in members %}
 <div class="card">
@@ -28,22 +22,28 @@
   {% if member.is_admin %}
     <span class="badge">admin</span>
   {% else %}
-    <form method="POST"
-          action="{{ url_for('promote_to_admin',workspace_id=workspace.workspace_id, target_user_id=member.user_id) }}"
-          style="display:inline">
-      <button type="submit">Make Admin</button>
-    </form>
-    <form method="POST"
-          action="{{ url_for('remove_workspace_member',workspace_id=workspace.workspace_id, target_user_id=member.user_id) }}"
-          style="display:inline">
-      <button type="submit" onclick="return confirm('Remove this member?')">
-        Remove
-      </button>
-    </form>
+    {% if is_admin %}
+      <form method="POST"
+            action="{{ url_for('promote_to_admin',
+                               workspace_id=workspace.workspace_id,
+                               target_user_id=member.user_id) }}"
+            style="display:inline">
+        <button type="submit">Make Admin</button>
+      </form>
+      <form method="POST"
+            action="{{ url_for('remove_workspace_member',
+                               workspace_id=workspace.workspace_id,
+                               target_user_id=member.user_id) }}"
+            style="display:inline">
+        <button type="submit"
+                onclick="return confirm('Remove this member?')">
+          Remove
+        </button>
+      </form>
+    {% endif %}
   {% endif %}
 </div>
 {% endfor %}
-{% endif %}
 
 <h3>Channels</h3>
 {% if channels %}
@@ -53,12 +53,15 @@
       <a href="{{ url_for('channel', channel_id=ch.channel_id) }}">
         #{{ ch.name }}
       </a>
-      <span class="badge {{ ch.channel_type }}">{{ ch.channel_type }}</span>
+      <span class="badge {{ ch.channel_type }}">
+        {{ ch.channel_type }}
+      </span>
     {% else %}
       <span>#{{ ch.name }}</span>
       <span class="badge">{{ ch.channel_type }}</span>
       <form method="POST"
-            action="{{ url_for('join_channel', channel_id=ch.channel_id) }}"
+            action="{{ url_for('join_channel', 
+                               channel_id=ch.channel_id) }}"
             style="display:inline">
         <button type="submit">Join</button>
       </form>
@@ -71,7 +74,8 @@
 
 <h3>Create Channel</h3>
 <form method="POST"
-      action="{{ url_for('create_channel', workspace_id=workspace.workspace_id) }}">
+      action="{{ url_for('create_channel',
+                         workspace_id=workspace.workspace_id) }}">
   <input name="name" placeholder="Channel name" required>
   <select name="channel_type">
     <option value="public">Public</option>
@@ -82,7 +86,8 @@
 
 <h3>Direct Message</h3>
 <form method="POST"
-      action="{{ url_for('create_direct_channel', workspace_id=workspace.workspace_id) }}">
+      action="{{ url_for('create_direct_channel',
+                         workspace_id=workspace.workspace_id) }}">
   <input name="username" placeholder="Username to message" required>
   <button type="submit">Start DM</button>
 </form>

@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="profile-card">
+  <h2>✏️ Edit Profile</h2>
+
+  <form method="POST" class="profile-form">
+
+    <label>Username</label>
+    <input name="username" value="{{ user.username }}" required>
+
+    <label>Nickname</label>
+    <input name="nickname" value="{{ user.nickname or '' }}" placeholder="Optional nickname">
+
+    <label>Email</label>
+    <input value="{{ user.email }}" disabled>
+
+    <small class="hint">Email cannot be changed</small>
+
+    <button type="submit">💾 Save Changes</button>
+
+  </form>
+
+  <a class="back-link" href="{{ url_for('dashboard') }}">← Back to dashboard</a>
+</div>
+
+{% endblock %}

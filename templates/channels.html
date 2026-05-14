@@ -1,12 +1,19 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>#{{ channel.name }} 
-  <small>in {{ channel.workspace_name }}</small>
-</h2>
 
-<form method="GET">
-  <input name="search" placeholder="Search messages..." 
-         value="{{ keyword }}">
+<div class="chat-header">
+  <h2>#{{ channel.name }}</h2>
+  <span class="workspace">in {{ channel.workspace_name }}</span>
+
+  {% if channel.channel_type == 'private' %}
+    <a class="invite-btn" href="{{ url_for('invite_to_channel', channel_id=channel.channel_id) }}">
+      + Invite User
+    </a>
+  {% endif %}
+</div>
+
+<form method="GET" class="search-bar">
+  <input name="search" placeholder="🔍 Search messages..." value="{{ keyword }}">
   <button type="submit">Search</button>
 </form>
 
@@ -26,8 +33,20 @@
   {% endfor %}
 </div>
 
-<form method="POST" action="{{ url_for('post_message', channel_id=channel.channel_id) }}">
+<form method="POST"
+      action="{{ url_for('post_message', channel_id=channel.channel_id) }}"
+      class="message-form">
+
   <textarea name="body" placeholder="Write a message..." required></textarea>
-  <button type="submit">Send</button>
+
+  <button type="submit">Send 💬</button>
 </form>
+<script>
+window.onload = function () {
+    const box = document.querySelector(".messages");
+    if (box) {
+        box.scrollTop = box.scrollHeight;
+    }
+};
+</script>
 {% endblock %}

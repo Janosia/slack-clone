@@ -111,9 +111,9 @@ def dashboard():
         (user_id,)
     )
 
-    invitations = db.query(
-        """SELECT wi.invitation_id, w.name AS workspace_name,
-                  u.username AS invited_by
+    # Pending workspace invitations
+    workspace_invitations = db.query(
+        """SELECT wi.invitation_id, w.name AS workspace_name, u.username AS invited_by
            FROM workspace_invitations wi
            JOIN workspaces w ON wi.workspace_id = w.workspace_id
            JOIN users u ON wi.invited_by = u.user_id
@@ -121,7 +121,18 @@ def dashboard():
         (user_id,)
     )
 
-    return render_template('dashboard.html',workspaces=workspaces,invitations=invitations)
+    # Pending channel invitations
+    channel_invitations = db.query(
+        """SELECT ci.invitation_id, c.name AS channel_name, w.name AS workspace_name, u.username AS invited_by
+           FROM channel_invitations ci
+           JOIN channels c ON ci.channel_id = c.channel_id
+           JOIN workspaces w ON c.workspace_id = w.workspace_id
+           JOIN users u ON ci.invited_by = u.user_id
+           WHERE ci.invited_user_id = %s AND ci.status = 'pending'""",
+        (user_id,)
+    )
+
+    return render_template('dashboard.html',workspaces=workspaces, invitations=workspace_invitations, channel_invitations=channel_invitations)
 
 
 @app.route('/workspace/create', methods=['POST'])
@@ -523,8 +534,7 @@ def invite_to_channel(channel_id):
 
     return render_template('invite_channel.html', channel=channel_info)
 
-@app.route('/channel-invitation/<int:inv_id>/respond', 
-           methods=['POST'])
+@app.route('/channel-invitation/<int:inv_id>/respond', methods=['POST'])
 def respond_channel_invitation(inv_id):
     if 'user_id' not in session:
         return redirect(url_for('login'))

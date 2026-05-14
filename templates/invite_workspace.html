@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Invite someone to {{ workspace.name }}</h2>
+
+<form method="POST">
+  <label>Username to invite:</label><br>
+  <input name="username" placeholder="e.g. bob" required>
+  <button type="submit">Send Invitation</button>
+</form>
+
+<br>
+<a href="{{ url_for('workspace', 
+                    workspace_id=workspace.workspace_id) }}">
+  ← Back to workspace
+</a>
+{% endblock %}

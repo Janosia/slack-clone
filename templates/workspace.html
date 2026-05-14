@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{{ workspace.name }}</h2>
+<p>{{ workspace.description }}</p>
+
+{% if is_admin %}
+<a href="{{ url_for('invite_to_workspace', workspace_id=workspace.workspace_id) }}">
+  <button>Invite User</button>
+</a>
+{% endif %}
+
+<h3>Channels</h3>
+{% if channels %}
+  {% for ch in channels %}
+  <div class="card">
+    {% if ch.is_member %}
+      <a href="{{ url_for('channel', channel_id=ch.channel_id) }}">
+        #{{ ch.name }}
+      </a>
+      <span class="badge {{ ch.channel_type }}">{{ ch.channel_type }}</span>
+    {% else %}
+      <span>#{{ ch.name }}</span>
+      <span class="badge">{{ ch.channel_type }}</span>
+      <form method="POST"
+            action="{{ url_for('join_channel', channel_id=ch.channel_id) }}"
+            style="display:inline">
+        <button type="submit">Join</button>
+      </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+  <p>No channels yet.</p>
+{% endif %}
+
+<h3>Create Channel</h3>
+<form method="POST"
+      action="{{ url_for('create_channel', workspace_id=workspace.workspace_id) }}">
+  <input name="name" placeholder="Channel name" required>
+  <select name="channel_type">
+    <option value="public">Public</option>
+    <option value="private">Private</option>
+    <option value="direct">Direct</option>
+  </select>
+  <button type="submit">Create</button>
+</form>
+
+<br>
+<a href="{{ url_for('dashboard') }}">← Back to dashboard</a>
+{% endblock %}

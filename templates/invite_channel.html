@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Invite someone to #{{ channel.name }}</h2>
+<p>Channel type: {{ channel.channel_type }}</p>
+
+<form method="POST">
+  <label>Username to invite:</label><br>
+  <input name="username" placeholder="e.g. alice" required>
+  <button type="submit">Send Invitation</button>
+</form>
+
+<br>
+<a href="{{ url_for('channel', channel_id=channel.channel_id) }}">
+  ← Back to channel
+</a>
+{% endblock %}

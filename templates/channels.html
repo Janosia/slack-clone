@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>#{{ channel.name }} 
+  <small>in {{ channel.workspace_name }}</small>
+</h2>
+
+<form method="GET">
+  <input name="search" placeholder="Search messages..." 
+         value="{{ keyword }}">
+  <button type="submit">Search</button>
+</form>
+
+<div class="messages">
+  {% for msg in messages %}
+    <div class="message-wrapper {% if msg.username == session.username %}me{% else %}other{% endif %}">
+      <div class="message">
+        <div class="meta">
+          <strong>{{ msg.username }}</strong>
+          <span class="time">{{ msg.created_at }}</span>
+        </div>
+        <div class="text">
+          {{ msg.body }}
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<form method="POST" action="{{ url_for('post_message', channel_id=channel.channel_id) }}">
+  <textarea name="body" placeholder="Write a message..." required></textarea>
+  <button type="submit">Send</button>
+</form>
+{% endblock %}

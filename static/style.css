@@ -277,3 +277,79 @@ nav {
 a {
     color: var(--link);
 }
+
+.chat-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 10px 15px;
+    margin-bottom: 10px;
+    background: var(--card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+.chat-header h2 {
+    margin: 0;
+    color: var(--accent-green);
+}
+
+.workspace {
+    font-size: 13px;
+    opacity: 0.7;
+    margin-left: 10px;
+}
+
+/* invite button */
+.invite-btn {
+    background: linear-gradient(90deg, var(--accent-green), var(--accent-pink));
+    color: white;
+    padding: 6px 12px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* search bar */
+.search-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.search-bar input {
+    flex: 1;
+    padding: 10px;
+    border-radius: 10px;
+}
+
+/* messages container */
+.messages {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 15px;
+    height: 60vh;
+    overflow-y: auto;
+}
+
+/* message form */
+.message-form {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.message-form textarea {
+    flex: 1;
+    height: 60px;
+    resize: none;
+    border-radius: 10px;
+    padding: 10px;
+}
+
+.message-form button {
+    width: 120px;
+    border-radius: 10px;
+}

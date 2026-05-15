@@ -18,8 +18,12 @@ def index():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """User registeration 
-    Checks implemented for duplicate email and username"""
+    """
+    User registeration 
+    Check 1. No duplicate email and username
+    
+    Queried table : User
+    Affected Table : user """
     if request.method == 'POST':
         email    = request.form.get('email', '').strip()
         username = request.form.get('username', '').strip()
@@ -64,7 +68,12 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """User login checks for valid username and password"""
+    """
+    User login checks for valid username and password
+    
+    Queried tables : user
+    Affected Table : None
+    """
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
@@ -98,6 +107,11 @@ def logout():
 
 @app.route('/dashboard')
 def dashboard():
+    """
+    Show workspace part of, pending invitation for both workspace and channels
+
+    Queriesd tables : Workspace, channels, workspace_invitation, channel_invitation
+    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -138,7 +152,10 @@ def dashboard():
 
 @app.route('/workspace/create', methods=['POST'])
 def create_workspace():
-    """Crete workspaces feature"""
+    """
+    Create workspaces feature
+    
+    Affected tables : workspace, workspace_members"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -180,6 +197,10 @@ def create_workspace():
 
 @app.route('/invitation/<int:inv_id>/respond', methods=['POST'])
 def respond_workspace_invitation(inv_id):
+    """
+    Queried tables : workspace_invitation
+    Affected tables : Workspace_inviations, workspace_members
+    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -248,7 +269,7 @@ def workspace(workspace_id):
 
     user_id = session['user_id']
     
-    print(f"DEBUG: user_id={user_id}, workspace_id={workspace_id}")
+    # print(f"DEBUG: user_id={user_id}, workspace_id={workspace_id}")
 
     # Check user is a member
     member = db.query(
@@ -257,7 +278,7 @@ def workspace(workspace_id):
         (workspace_id, user_id), fetchone=True
     )
 
-    print(f"DEBUG: member={member}")
+    # print(f"DEBUG: member={member}")
     
     if not member:
         flash('Access denied.')
@@ -286,7 +307,7 @@ def workspace(workspace_id):
            ORDER BY c.channel_type, c.name""",
         (user_id, workspace_id, user_id)
     )
-    print(f"DEBUG: channels={channels}")
+    # print(f"DEBUG: channels={channels}")
     members = db.query(
     """SELECT u.user_id, u.username, wm.is_admin
        FROM workspace_members wm
@@ -300,11 +321,19 @@ def workspace(workspace_id):
 
 @app.route('/workspace/<int:workspace_id>/channel/create', methods=['POST'])
 def create_channel(workspace_id):
+    """
+    Create a new channel inside a workspace.
+    Checks user is a workspace member before creating.
+    Creator is automatically added as channel member.
+
+    Queried tables: workspace_members
+    Affected tables: channels, channel_members
+    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    user_id      = session['user_id']
-    name         = request.form.get('name', '').strip()
+    user_id = session['user_id']
+    name = request.form.get('name', '').strip()
     channel_type = request.form.get('channel_type', 'public')
 
     if channel_type not in ('public', 'private', 'direct'):
@@ -350,6 +379,14 @@ def create_channel(workspace_id):
 
 @app.route('/workspace/<int:workspace_id>/remove/<int:target_user_id>', methods=['POST'])
 def remove_workspace_member(workspace_id, target_user_id):
+    """Removing an user from workspace
+    1. Check if user exists in workspace
+    2. Admin initiates the request
+    3. Remove user from all channels in that workspace
+    
+    Queried tables : workspace_members
+    Affected table : workspace_members, channel_members
+    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -404,7 +441,11 @@ def remove_workspace_member(workspace_id, target_user_id):
 
 @app.route('/workspace/<int:workspace_id>/promote/<int:target_user_id>', methods=['POST'])
 def promote_to_admin(workspace_id, target_user_id):
-    """ Promoting an user to admin """
+    """ 
+    Promoting user to admin 
+    Queried tables : workspace_members
+    Affected tables : workspace_members
+    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -432,10 +473,15 @@ def promote_to_admin(workspace_id, target_user_id):
 
 @app.route('/workspace/<int:workspace_id>/direct', methods=['POST'])
 def create_direct_channel(workspace_id):
-    """Creating Direct Channels 
+    """
+    Creating Direct Channels 
     1. Check if invited user exists
     2. Check if invited user is in the workspace
     3. Check if a direct channel already exists between them or not
+    4. User cannot send direct channel invitation to themselves 
+
+    Queried Tables :  Users, Workspace_members, channel, channel_members
+    Affected : channel, channel_members
     """
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -514,331 +560,18 @@ def create_direct_channel(workspace_id):
 
     return redirect(url_for('workspace', workspace_id=workspace_id))
 
-# ─────────────────────────────────────────
-# CHANNEL — messages, post, search
-# ─────────────────────────────────────────
-
-@app.route('/channel/<int:channel_id>')
-def channel(channel_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    user_id = session['user_id']
-    keyword = request.args.get('search', '').strip()
-
-    # Verify access: must be workspace member + channel member
-    access = db.query(
-        """SELECT 1 FROM channel_members cm
-           JOIN channels c ON cm.channel_id = c.channel_id
-           JOIN workspace_members wm 
-             ON c.workspace_id = wm.workspace_id
-           WHERE cm.channel_id=%s 
-             AND cm.user_id=%s 
-             AND wm.user_id=%s""",
-        (channel_id, user_id, user_id), fetchone=True
-    )
-    if not access:
-        flash('Access denied.')
-        return redirect(url_for('dashboard'))
-
-    channel_info = db.query(
-        """SELECT c.*, w.name AS workspace_name, 
-                  w.workspace_id
-           FROM channels c
-           JOIN workspaces w ON c.workspace_id = w.workspace_id
-           WHERE c.channel_id=%s""",
-        (channel_id,), fetchone=True
-    )
-
-    # Messages — optionally filtered by keyword
-    if keyword:
-        messages = db.query(
-            """SELECT m.*, u.username
-               FROM messages m
-               JOIN users u ON m.user_id = u.user_id
-               WHERE m.channel_id=%s 
-                 AND m.body LIKE %s
-               ORDER BY m.posted_at ASC""",
-            (channel_id, f'%{keyword}%')
-        )
-    else:
-        messages = db.query(
-            """SELECT m.*, u.username
-               FROM messages m
-               JOIN users u ON m.user_id = u.user_id
-               WHERE m.channel_id=%s
-               ORDER BY m.posted_at ASC""",
-            (channel_id,)
-        )
-
-    return render_template('channels.html', channel=channel_info, messages=messages, keyword=keyword)
-
-
-@app.route('/channel/<int:channel_id>/post', methods=['POST'])
-def post_message(channel_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    user_id = session['user_id']
-    body    = request.form.get('body', '').strip()
-
-    if not body:
-        return redirect(url_for('channel', channel_id=channel_id))
-
-    # Verify membership before posting
-    member = db.query(
-        """SELECT 1 FROM channel_members
-           WHERE channel_id=%s AND user_id=%s""",
-        (channel_id, user_id), fetchone=True
-    )
-    if not member:
-        flash('You are not a member of this channel.')
-        return redirect(url_for('dashboard'))
-
-    db.query(
-        """INSERT INTO messages (channel_id, user_id, body)
-           VALUES (%s, %s, %s)""",
-        (channel_id, user_id, body)
-    )
-    return redirect(url_for('channel', channel_id=channel_id))
-
-@app.route('/channel/<int:channel_id>/invite', methods=['GET', 'POST'])
-def invite_to_channel(channel_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    user_id = session['user_id']
-
-    # Get channel info
-    channel_info = db.query(
-        """SELECT c.*, w.workspace_id 
-           FROM channels c
-           JOIN workspaces w ON c.workspace_id = w.workspace_id
-           WHERE c.channel_id = %s""",
-        (channel_id,), fetchone=True
-    )
-
-    if not channel_info:
-        flash('Channel not found.')
-        return redirect(url_for('dashboard'))
-
-    # Only creator of private channel can invite
-    if channel_info['channel_type'] == 'private' and \
-       channel_info['created_by'] != user_id:
-        flash('Only the channel creator can invite to private channels.')
-        return redirect(url_for('channel', channel_id=channel_id))
-
-    # User must be a channel member to invite
-    is_member = db.query(
-        """SELECT 1 FROM channel_members
-           WHERE channel_id=%s AND user_id=%s""",
-        (channel_id, user_id), fetchone=True
-    )
-    if not is_member:
-        flash('You are not a member of this channel.')
-        return redirect(url_for('dashboard'))
-
-    if request.method == 'POST':
-        invitee_username = request.form.get('username', '').strip()
-
-        # Find user by username
-        invitee = db.query(
-            "SELECT user_id FROM users WHERE username=%s",
-            (invitee_username,), fetchone=True
-        )
-        if not invitee:
-            flash(f'User "{invitee_username}" not found.')
-            return render_template('invite_channel.html',
-                                   channel=channel_info)
-
-        invitee_id = invitee['user_id']
-
-        # Can't invite yourself
-        if invitee_id == user_id:
-            flash('You cannot invite yourself.')
-            return render_template('invite_channel.html',
-                                   channel=channel_info)
-
-        # Invitee must be a workspace member first
-        in_workspace = db.query(
-            """SELECT 1 FROM workspace_members
-               WHERE workspace_id=%s AND user_id=%s""",
-            (channel_info['workspace_id'], invitee_id), fetchone=True
-        )
-        if not in_workspace:
-            flash(f'{invitee_username} is not a member of this workspace.')
-            return render_template('invite_channel.html',
-                                   channel=channel_info)
-
-        # Check if already a channel member
-        already_member = db.query(
-            """SELECT 1 FROM channel_members
-               WHERE channel_id=%s AND user_id=%s""",
-            (channel_id, invitee_id), fetchone=True
-        )
-        if already_member:
-            flash(f'{invitee_username} is already in this channel.')
-            return render_template('invite_channel.html',
-                                   channel=channel_info)
-
-        # Check if already has pending invitation
-        already_invited = db.query(
-            """SELECT 1 FROM channel_invitations
-               WHERE channel_id=%s 
-                 AND invited_user_id=%s 
-                 AND status='pending'""",
-            (channel_id, invitee_id), fetchone=True
-        )
-        if already_invited:
-            flash(f'{invitee_username} already has a pending invitation.')
-            return render_template('invite_channel.html',
-                                   channel=channel_info)
-
-        # Send invitation
-        db.query(
-            """INSERT INTO channel_invitations
-               (channel_id, invited_by, invited_user_id, status)
-               VALUES (%s, %s, %s, 'pending')""",
-            (channel_id, user_id, invitee_id)
-        )
-        flash(f'Invitation sent to {invitee_username}.')
-        return redirect(url_for('channel', channel_id=channel_id))
-
-    return render_template('invite_channel.html', channel=channel_info)
-
-@app.route('/channel-invitation/<int:inv_id>/respond', methods=['POST'])
-def respond_channel_invitation(inv_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    user_id = session['user_id']
-    action  = request.form.get('action')
-
-    if action not in ('accepted', 'declined'):
-        flash('Invalid action.')
-        return redirect(url_for('dashboard'))
-
-    conn = db.get_connection()
-    cur  = conn.cursor()
-    try:
-        # Verify invitation belongs to this user
-        cur.execute(
-            """SELECT channel_id FROM channel_invitations
-               WHERE invitation_id=%s 
-                 AND invited_user_id=%s
-                 AND status='pending'""",
-            (inv_id, user_id)
-        )
-        inv = cur.fetchone()
-        if not inv:
-            flash('Invitation not found.')
-            conn.close()
-            return redirect(url_for('dashboard'))
-
-        channel_id = inv[0]
-
-        # Update invitation status
-        cur.execute(
-            """UPDATE channel_invitations
-               SET status=%s, responded_at=NOW()
-               WHERE invitation_id=%s""",
-            (action, inv_id)
-        )
-
-        # If accepted add to channel_members
-        if action == 'accepted':
-            cur.execute(
-                """INSERT INTO channel_members (channel_id, user_id)
-                   VALUES (%s, %s)
-                   ON CONFLICT DO NOTHING""",
-                (channel_id, user_id)
-            )
-        conn.commit()
-        flash(f'Invitation {action}.')
-    except Exception as e:
-        conn.rollback()
-        flash('Error responding to invitation.')
-    finally:
-        cur.close()
-        conn.close()
-
-    return redirect(url_for('dashboard'))
-
-@app.route('/channel/<int:channel_id>/join', methods=['POST'])
-def join_channel(channel_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    user_id = session['user_id']
-
-    # Only allow joining public channels directly
-    ch = db.query(
-        "SELECT * FROM channels WHERE channel_id=%s",
-        (channel_id,), fetchone=True
-    )
-    if not ch or ch['channel_type'] != 'public':
-        flash('You can only join public channels directly.')
-        return redirect(url_for('dashboard'))
-
-    db.query(
-        """INSERT INTO channel_members (channel_id, user_id)
-           VALUES (%s, %s) ON CONFLICT DO NOTHING""",
-        (channel_id, user_id)
-    )
-    return redirect(url_for('channel', channel_id=channel_id))
-
-@app.route('/change-password', methods=['GET', 'POST'])
-def change_password():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    user_id = session['user_id']
-
-    if request.method == 'POST':
-        current_password = request.form.get('current_password', '').strip()
-        new_password     = request.form.get('new_password', '').strip()
-        confirm_password = request.form.get('confirm_password', '').strip()
-
-        # Check all fields filled
-        if not current_password or not new_password or not confirm_password:
-            flash('All fields are required.')
-            return render_template('change_password.html')
-
-        # Check new passwords match
-        if new_password != confirm_password:
-            flash('New passwords do not match.')
-            return render_template('change_password.html')
-
-        # Check minimum length
-        if len(new_password) < 6:
-            flash('New password must be at least 6 characters.')
-            return render_template('change_password.html')
-
-        # Fetch current hash from database
-        user = db.query(
-            "SELECT password_hash FROM users WHERE user_id=%s",
-            (user_id,), fetchone=True
-        )
-
-        # Verify current password is correct
-        if not check_password_hash(user['password_hash'], current_password):
-            flash('Current password is incorrect.')
-            return render_template('change_password.html')
-
-        # Hash new password and update
-        new_hash = generate_password_hash(new_password)
-        db.query(
-            "UPDATE users SET password_hash=%s WHERE user_id=%s",
-            (new_hash, user_id)
-        )
-
-        flash('Password changed successfully.')
-        return redirect(url_for('dashboard'))
-
-    return render_template('change_password.html')
-
 @app.route('/workspace/<int:workspace_id>/invite', methods=['GET', 'POST'])
 def invite_to_workspace(workspace_id):
+    """
+    Send invitations to a workspace
+    Check: 1. Admin sends the invite
+    2. Invitee must exists
+    3. Invitee must be a member already
+    4. No duplicate invitations
+    
+    Queried tables : workspace_members, workspaces, workspace_invitation 
+    Affected Table : workspace_invitations
+    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -907,6 +640,368 @@ def invite_to_workspace(workspace_id):
         return redirect(url_for('workspace', workspace_id=workspace_id))
 
     return render_template('invite_workspace.html', workspace=workspace_info)
+
+
+# ─────────────────────────────────────────
+# CHANNEL — messages, post, search
+# ─────────────────────────────────────────
+
+@app.route('/channel/<int:channel_id>')
+def channel(channel_id):
+    """
+    Channel information and message filtering using keyword 
+    
+    Queried tables : Workspaces, Workspace_members, Channel_members, Messages
+    Affected tables : None
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    keyword = request.args.get('search', '').strip()
+
+    # Verify access: must be workspace member + channel member
+    access = db.query(
+        """SELECT 1 FROM channel_members cm
+           JOIN channels c ON cm.channel_id = c.channel_id
+           JOIN workspace_members wm 
+             ON c.workspace_id = wm.workspace_id
+           WHERE cm.channel_id=%s 
+             AND cm.user_id=%s 
+             AND wm.user_id=%s""",
+        (channel_id, user_id, user_id), fetchone=True
+    )
+    if not access:
+        flash('Access denied.')
+        return redirect(url_for('dashboard'))
+
+    channel_info = db.query(
+        """SELECT c.*, w.name AS workspace_name, w.workspace_id
+           FROM channels c
+           JOIN workspaces w ON c.workspace_id = w.workspace_id
+           WHERE c.channel_id=%s""",
+        (channel_id,), fetchone=True
+    )
+
+    # Messages — optionally filtered by keyword
+    if keyword:
+        messages = db.query(
+            """SELECT m.*, u.username
+               FROM messages m
+               JOIN users u ON m.user_id = u.user_id
+               WHERE m.channel_id=%s 
+                 AND m.body LIKE %s
+               ORDER BY m.posted_at ASC""",
+            (channel_id, f'%{keyword}%')
+        )
+    else:
+        messages = db.query(
+            """SELECT m.*, u.username
+               FROM messages m
+               JOIN users u ON m.user_id = u.user_id
+               WHERE m.channel_id=%s
+               ORDER BY m.posted_at ASC""",
+            (channel_id,)
+        )
+
+    return render_template('channels.html', channel=channel_info, messages=messages, keyword=keyword)
+
+
+@app.route('/channel/<int:channel_id>/post', methods=['POST'])
+def post_message(channel_id):
+    """
+    Send message on channel
+    Check if user is part of channel
+
+    Queried tables : Channel_members
+
+    Affected tables :  Messages
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    body    = request.form.get('body', '').strip()
+
+    if not body:
+        return redirect(url_for('channel', channel_id=channel_id))
+
+    # Verify membership before posting
+    member = db.query(
+        """SELECT 1 FROM channel_members
+           WHERE channel_id=%s AND user_id=%s""",
+        (channel_id, user_id), fetchone=True
+    )
+    if not member:
+        flash('You are not a member of this channel.')
+        return redirect(url_for('dashboard'))
+
+    db.query(
+        """INSERT INTO messages (channel_id, user_id, body)
+           VALUES (%s, %s, %s)""",
+        (channel_id, user_id, body)
+    )
+    return redirect(url_for('channel', channel_id=channel_id))
+
+@app.route('/channel/<int:channel_id>/invite', methods=['GET', 'POST'])
+def invite_to_channel(channel_id):
+    """
+    Send channel invitation to a user 
+    1. Invitee must be workspace member
+    2. Invitor cannot invite themselves
+    3. Invitee must exists
+    4. No duplicate invitations
+    5. Invitee should not be part of channel
+
+    Queried tables : Workspaces, Channels, Workspace_members, Channel_invitations, Channel_members
+
+    Affected tables : Channel_invitations
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+
+    # Get channel info
+    channel_info = db.query(
+        """SELECT c.*, w.workspace_id 
+           FROM channels c
+           JOIN workspaces w ON c.workspace_id = w.workspace_id
+           WHERE c.channel_id = %s""",
+        (channel_id,), fetchone=True
+    )
+
+    if not channel_info:
+        flash('Channel not found.')
+        return redirect(url_for('dashboard'))
+
+    # Only creator of private channel can invite
+    if channel_info['channel_type'] == 'private' and \
+       channel_info['created_by'] != user_id:
+        flash('Only the channel creator can invite to private channels.')
+        return redirect(url_for('channel', channel_id=channel_id))
+
+    # User must be a channel member to invite
+    is_member = db.query(
+        """SELECT 1 FROM channel_members
+           WHERE channel_id=%s AND user_id=%s""",
+        (channel_id, user_id), fetchone=True
+    )
+    if not is_member:
+        flash('You are not a member of this channel.')
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        invitee_username = request.form.get('username', '').strip()
+
+        # Find user by username
+        invitee = db.query(
+            "SELECT user_id FROM users WHERE username=%s",
+            (invitee_username,), fetchone=True
+        )
+        if not invitee:
+            flash(f'User "{invitee_username}" not found.')
+            return render_template('invite_channel.html', channel=channel_info)
+
+        invitee_id = invitee['user_id']
+
+        # Can't invite yourself
+        if invitee_id == user_id:
+            flash('You cannot invite yourself.')
+            return render_template('invite_channel.html', channel=channel_info)
+
+        # Invitee must be a workspace member first
+        in_workspace = db.query(
+            """SELECT 1 FROM workspace_members
+               WHERE workspace_id=%s AND user_id=%s""",
+            (channel_info['workspace_id'], invitee_id), fetchone=True
+        )
+        if not in_workspace:
+            flash(f'{invitee_username} is not a member of this workspace.')
+            return render_template('invite_channel.html', channel=channel_info)
+
+        # Check if already a channel member
+        already_member = db.query(
+            """SELECT 1 FROM channel_members
+               WHERE channel_id=%s AND user_id=%s""",
+            (channel_id, invitee_id), fetchone=True
+        )
+        if already_member:
+            flash(f'{invitee_username} is already in this channel.')
+            return render_template('invite_channel.html', channel=channel_info)
+
+        # Check if already has pending invitation
+        already_invited = db.query(
+            """SELECT 1 FROM channel_invitations
+               WHERE channel_id=%s 
+                 AND invited_user_id=%s 
+                 AND status='pending'""",
+            (channel_id, invitee_id), fetchone=True
+        )
+        if already_invited:
+            flash(f'{invitee_username} already has a pending invitation.')
+            return render_template('invite_channel.html', channel=channel_info)
+
+        # Send invitation
+        db.query(
+            """INSERT INTO channel_invitations
+               (channel_id, invited_by, invited_user_id, status)
+               VALUES (%s, %s, %s, 'pending')""",
+            (channel_id, user_id, invitee_id)
+        )
+        flash(f'Invitation sent to {invitee_username}.')
+        return redirect(url_for('channel', channel_id=channel_id))
+
+    return render_template('invite_channel.html', channel=channel_info)
+
+@app.route('/channel-invitation/<int:inv_id>/respond', methods=['POST'])
+def respond_channel_invitation(inv_id):
+    """Response to an invitation
+    1. Check if invitation exists
+    2. If accepted, add user to channel_members 
+    Affected tables : channel_invitation, channel_members 
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    action  = request.form.get('action')
+
+    if action not in ('accepted', 'declined'):
+        flash('Invalid action.')
+        return redirect(url_for('dashboard'))
+
+    conn = db.get_connection()
+    cur  = conn.cursor()
+    try:
+        # Verify invitation belongs to this user
+        cur.execute(
+            """SELECT channel_id FROM channel_invitations
+               WHERE invitation_id=%s 
+                 AND invited_user_id=%s
+                 AND status='pending'""",
+            (inv_id, user_id)
+        )
+        inv = cur.fetchone()
+        if not inv:
+            flash('Invitation not found.')
+            conn.close()
+            return redirect(url_for('dashboard'))
+
+        channel_id = inv[0]
+
+        # Update invitation status
+        cur.execute(
+            """UPDATE channel_invitations
+               SET status=%s, responded_at=NOW()
+               WHERE invitation_id=%s""",
+            (action, inv_id)
+        )
+
+        # If accepted add to channel_members
+        if action == 'accepted':
+            cur.execute(
+                """INSERT INTO channel_members (channel_id, user_id)
+                   VALUES (%s, %s)
+                   ON CONFLICT DO NOTHING""",
+                (channel_id, user_id)
+            )
+        conn.commit()
+        flash(f'Invitation {action}.')
+    except Exception as e:
+        conn.rollback()
+        flash('Error responding to invitation.')
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect(url_for('dashboard'))
+
+@app.route('/channel/<int:channel_id>/join', methods=['POST'])
+def join_channel(channel_id):
+    """
+    Join a public channel directly without invitation.
+    Only public channels can be joined this way.
+
+    Queried tables: channels
+    Affected tables: channel_members
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+
+    # Only allow joining public channels directly
+    ch = db.query(
+        "SELECT * FROM channels WHERE channel_id=%s",
+        (channel_id,), fetchone=True
+    )
+    if not ch or ch['channel_type'] != 'public':
+        flash('You can only join public channels directly.')
+        return redirect(url_for('dashboard'))
+
+    db.query(
+        """INSERT INTO channel_members (channel_id, user_id)
+           VALUES (%s, %s) ON CONFLICT DO NOTHING""",
+        (channel_id, user_id)
+    )
+    return redirect(url_for('channel', channel_id=channel_id))
+
+# ─────────────────────────────────────────
+# CHANGE PASSWORD
+# ─────────────────────────────────────────
+
+
+@app.route('/change-password', methods=['GET', 'POST'])
+def change_password():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+
+    if request.method == 'POST':
+        current_password = request.form.get('current_password', '').strip()
+        new_password     = request.form.get('new_password', '').strip()
+        confirm_password = request.form.get('confirm_password', '').strip()
+
+        # Check all fields filled
+        if not current_password or not new_password or not confirm_password:
+            flash('All fields are required.')
+            return render_template('change_password.html')
+
+        # Check new passwords match
+        if new_password != confirm_password:
+            flash('New passwords do not match.')
+            return render_template('change_password.html')
+
+        # Check minimum length
+        if len(new_password) < 6:
+            flash('New password must be at least 6 characters.')
+            return render_template('change_password.html')
+
+        # Fetch current hash from database
+        user = db.query(
+            "SELECT password_hash FROM users WHERE user_id=%s",
+            (user_id,), fetchone=True
+        )
+
+        # Verify current password is correct
+        if not check_password_hash(user['password_hash'], current_password):
+            flash('Current password is incorrect.')
+            return render_template('change_password.html')
+
+        # Hash new password and update
+        new_hash = generate_password_hash(new_password)
+        db.query(
+            "UPDATE users SET password_hash=%s WHERE user_id=%s",
+            (new_hash, user_id)
+        )
+
+        flash('Password changed successfully.')
+        return redirect(url_for('dashboard'))
+
+    return render_template('change_password.html')
+
 
 # ─────────────────────────────────────────
 # PROFILE

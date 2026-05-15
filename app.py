@@ -954,6 +954,11 @@ def join_channel(channel_id):
 
 @app.route('/change-password', methods=['GET', 'POST'])
 def change_password():
+    """
+    Change user
+    Queried Table : User
+    Altered Table : User
+    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -991,7 +996,7 @@ def change_password():
             return render_template('change_password.html')
 
         # Hash new password and update
-        new_hash = generate_password_hash(new_password)
+        new_hash = generate_password_hash(new_password, method="pbkdf2:sha256")
         db.query(
             "UPDATE users SET password_hash=%s WHERE user_id=%s",
             (new_hash, user_id)
@@ -1008,7 +1013,13 @@ def change_password():
 # ─────────────────────────────────────────
 
 @app.route('/profile', methods=['GET', 'POST'])
-def edit_profile():
+def edit_profile(): 
+    """
+    Edit profile attributes (username/email)
+
+    Queried Tables : User
+    Altered Tables : User
+    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
 

@@ -302,6 +302,14 @@ http://localhost:5000
 
 ---
 
+## UI Features
+
+### Light / Dark Mode
+The application supports both light and dark themes. 
+Users can toggle between modes using the button in the 
+navbar. The preference is saved so it persists across 
+page navigation.
+
 ## Security
 
 ### SQL Injection Prevention
